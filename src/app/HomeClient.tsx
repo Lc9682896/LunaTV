@@ -12,11 +12,6 @@ import {
 } from '@/lib/bangumi.client';
 import { cleanExpiredCache, clearRecommendsCache } from '@/lib/shortdrama-cache';
 import { ShortDramaItem, ReleaseCalendarItem } from '@/lib/types';
-import {
-  getAllFavorites,
-  getAllPlayRecords,
-  getAllReminders,
-} from '@/lib/db.client';
 import { useClearFavoritesMutation } from '@/hooks/useFavoritesMutations';
 import { useClearRemindersMutation } from '@/hooks/useRemindersMutations';
 import { useHomePageQueries } from '@/hooks/useHomePageQueries';
@@ -24,6 +19,9 @@ import { getDoubanDetails } from '@/lib/douban.client';
 import { DoubanItem } from '@/lib/types';
 import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
 import { CinematicLoadingFallback } from '@/components/CinematicLoadingFallback';
+import { useFavoritesQuery } from '@/hooks/useFavoritesQuery';
+import { usePlayRecordsQuery } from '@/hooks/usePlayRecordsQuery';
+import { useRemindersQuery } from '@/hooks/useRemindersQuery';
 
 import CapsuleSwitch from '@/components/CapsuleSwitch';
 import ContinueWatching from '@/components/ContinueWatching';
@@ -123,27 +121,14 @@ const homeReducer = (state: HomeState, action: HomeAction): HomeState => {
   }
 };
 
-// Query Options 工厂函数
-const allFavoritesOptions = () => queryOptions({
-  queryKey: ['favorites'],
-  queryFn: () => getAllFavorites(),
-  staleTime: 5 * 60 * 1000,
-  gcTime: 10 * 60 * 1000,
-});
+// Query Options 工厂函数 - 使用新的 TanStack Query hooks
+import { favoritesQueryOptions } from '@/hooks/useFavoritesQuery';
+import { playRecordsQueryOptions } from '@/hooks/usePlayRecordsQuery';
+import { remindersQueryOptions } from '@/hooks/useRemindersQuery';
 
-const allPlayRecordsOptions = () => queryOptions({
-  queryKey: ['playRecords'],
-  queryFn: () => getAllPlayRecords(),
-  staleTime: 5 * 60 * 1000,
-  gcTime: 10 * 60 * 1000,
-});
-
-const allRemindersOptions = () => queryOptions({
-  queryKey: ['reminders'],
-  queryFn: () => getAllReminders(),
-  staleTime: 5 * 60 * 1000,
-  gcTime: 10 * 60 * 1000,
-});
+const allFavoritesOptions = () => favoritesQueryOptions;
+const allPlayRecordsOptions = () => playRecordsQueryOptions;
+const allRemindersOptions = () => remindersQueryOptions;
 
 function HomeClient({ initialConfig }: {
   initialConfig: {
@@ -377,18 +362,11 @@ function HomeClient({ initialConfig }: {
     return !(window as any).RUNTIME_CONFIG?.DISABLE_HERO_TRAILER;
   }, []); // Empty deps - only read once on mount
 
-  // 🚀 计算 loading 状态：数据获取中且没有任何数据时显示 loading
-  // 使用 isFetching 而不是 isLoading，确保即使有缓存也会在重新获取时显示 loading
-  // 但只在没有数据时显示，避免有缓存数据时闪烁
-  const hasAnyData = homeData && (
-    homeData.hotMovies.length > 0 ||
-    homeData.hotTvShows.length > 0 ||
-    homeData.hotVarietyShows.length > 0 ||
-    homeData.hotAnime.length > 0 ||
-    homeData.hotShortDramas.length > 0 ||
-    homeData.bangumiCalendar.length > 0
-  );
-  const loading = homeFetching && !hasAnyData;
+  // 🚀 计算 loading 状态：使用 TanStack Query 的 isLoading 状态
+  // isLoading = 任何查询正在首次加载（没有缓存数据）
+  // 这确保用户看到的是完整加载好的页面，而不是部分内容逐渐出现
+  // 参考 TanStack Query 官方文档 useQueries combine 示例
+  const loading = homeLoading;
 
   // 🚀 Web Worker引用
   const workerRef = useRef<Worker | null>(null);
